@@ -1,5 +1,6 @@
 let config = null;
 let weatherUpdateTimer = null;
+let isInitialized = false;
 
 const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 var mmddyy=true;
@@ -25,18 +26,47 @@ function time(){
 }
 
 async function initializeWeather() {
+    if (isInitialized) {
+        return;
+    }
+    isInitialized = true;
+
     config = ConfigManager.load();
 
-    config = await LocationManager.updateLocationIfNeeded(config);
+    setupConfigSync();
 
     const cachedWeather = ConfigManager.loadWeatherCache();
     if (cachedWeather && ConfigManager.isWeatherCacheValid()) {
         displayCachedWeather(cachedWeather.data);
     }
 
-    await getWeather();
+    const fallbackConfig = LocationManager.useFallbackLocation();
+    if (fallbackConfig && fallbackConfig.latitude && fallbackConfig.longitude) {
+        config = fallbackConfig;
+        if (!cachedWeather || !ConfigManager.isWeatherCacheValid()) {
+            await getWeather();
+        }
+    } else {
+        config = await LocationManager.updateLocationIfNeeded(config);
+        await getWeather();
+    }
 
     startWeatherUpdateTimer();
+}
+
+function setupConfigSync() {
+    ConfigManager.onConfigSync((newConfig) => {
+        config = newConfig;
+        console.log('Config synced from another screen:', newConfig);
+        getWeather();
+    });
+
+    ConfigManager.onWeatherSync((weatherData) => {
+        console.log('Weather synced from another screen');
+        if (weatherData && weatherData.data) {
+            displayCachedWeather(weatherData.data);
+        }
+    });
 }
 
 function startWeatherUpdateTimer() {
@@ -217,6 +247,13 @@ async function getCurrentLocation(){
     } else {
         console.error('Location error:', result.error);
         document.getElementById('summaryVal').innerHTML = result.error;
+
+        const fallbackConfig = LocationManager.useFallbackLocation();
+        if (fallbackConfig) {
+            config = fallbackConfig;
+            document.getElementById('summaryVal').innerHTML = 'Using saved location';
+            await getWeather();
+        }
     }
 }
 
