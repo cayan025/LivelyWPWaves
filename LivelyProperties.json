@@ -1,0 +1,40 @@
+{
+  "uiCheck": {
+    "type": "checkbox",
+    "value": true,
+    "text": "UI"
+  },
+   "label2": {
+  	"type": "label",
+  	"value": "Weather (Open Meteo)"
+  },
+   "latitudeInput": {
+    "text": "Latitude",
+    "type": "textbox",
+    "value": "52.52"
+  },
+   "longitudeInput": {
+    "text": "Longitude",
+    "type": "textbox",
+    "value": "13.41"
+  },
+   "btnGetLocation": {
+    "text": "Use Current Location",
+    "type": "button",
+    "value": "Get Location"
+  },
+   "unit": {
+    "type": "dropdown",
+    "value": 0,
+    "text": "Unit",
+    "items": [
+      "Metric (°C)",
+      "Imperial (°F)"
+    ]
+  },
+  "btnRefresh" : {
+  "text" : "Click to Update",
+  "type" : "button",
+  "value" : "Refresh"
+  }
+}
