@@ -1,6 +1,7 @@
 const CONFIG_STORAGE_KEY = 'wavex_config';
 const WEATHER_CACHE_KEY = 'wavex_weather_cache';
 const LOCATION_PERMISSION_KEY = 'wavex_location_permission';
+const LOCATION_REQUEST_LOCK_KEY = 'wavex_location_request_lock';
 
 const ConfigManager = {
     defaultConfig: {
@@ -184,6 +185,58 @@ const ConfigManager = {
             window.removeEventListener(event, handler);
         });
         this.listeners = [];
+    },
+
+    acquireLocationRequestLock() {
+        try {
+            const lock = localStorage.getItem(LOCATION_REQUEST_LOCK_KEY);
+            if (lock) {
+                const lockData = JSON.parse(lock);
+                const LOCK_TIMEOUT = 30000;
+                if (Date.now() - lockData.timestamp < LOCK_TIMEOUT) {
+                    return false;
+                }
+            }
+
+            const lockData = {
+                timestamp: Date.now(),
+                instanceId: Math.random().toString(36).substr(2, 9)
+            };
+            localStorage.setItem(LOCATION_REQUEST_LOCK_KEY, JSON.stringify(lockData));
+            return lockData.instanceId;
+        } catch (error) {
+            console.error('Error acquiring location lock:', error);
+            return false;
+        }
+    },
+
+    releaseLocationRequestLock(instanceId) {
+        try {
+            const lock = localStorage.getItem(LOCATION_REQUEST_LOCK_KEY);
+            if (lock) {
+                const lockData = JSON.parse(lock);
+                if (lockData.instanceId === instanceId) {
+                    localStorage.removeItem(LOCATION_REQUEST_LOCK_KEY);
+                }
+            }
+        } catch (error) {
+            console.error('Error releasing location lock:', error);
+        }
+    },
+
+    isLocationRequestInProgress() {
+        try {
+            const lock = localStorage.getItem(LOCATION_REQUEST_LOCK_KEY);
+            if (lock) {
+                const lockData = JSON.parse(lock);
+                const LOCK_TIMEOUT = 30000;
+                return (Date.now() - lockData.timestamp) < LOCK_TIMEOUT;
+            }
+            return false;
+        } catch (error) {
+            console.error('Error checking location lock:', error);
+            return false;
+        }
     }
 };
 

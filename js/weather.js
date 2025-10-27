@@ -31,6 +31,9 @@ async function initializeWeather() {
     }
     isInitialized = true;
 
+    const randomDelay = Math.random() * 500;
+    await new Promise(resolve => setTimeout(resolve, randomDelay));
+
     config = ConfigManager.load();
 
     setupConfigSync();

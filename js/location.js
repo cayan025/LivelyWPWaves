@@ -1,6 +1,7 @@
 const LocationManager = {
     isRequestingLocation: false,
     locationPromise: null,
+    lockInstanceId: null,
 
     detectLocation() {
         if (this.locationPromise) {
@@ -14,6 +15,15 @@ const LocationManager = {
                 return;
             }
 
+            const lockId = ConfigManager.acquireLocationRequestLock();
+            if (!lockId) {
+                this.locationPromise = null;
+                reject(new Error('Location request already in progress'));
+                return;
+            }
+
+            this.lockInstanceId = lockId;
+
             const options = {
                 enableHighAccuracy: false,
                 timeout: 10000,
@@ -25,6 +35,9 @@ const LocationManager = {
             navigator.geolocation.getCurrentPosition(
                 (position) => {
                     this.isRequestingLocation = false;
+                    ConfigManager.releaseLocationRequestLock(this.lockInstanceId);
+                    this.lockInstanceId = null;
+
                     const location = {
                         latitude: position.coords.latitude,
                         longitude: position.coords.longitude,
@@ -37,6 +50,8 @@ const LocationManager = {
                 },
                 (error) => {
                     this.isRequestingLocation = false;
+                    ConfigManager.releaseLocationRequestLock(this.lockInstanceId);
+                    this.lockInstanceId = null;
                     this.locationPromise = null;
 
                     const errorMessages = {
@@ -82,6 +97,11 @@ const LocationManager = {
             return config;
         }
 
+        if (ConfigManager.isLocationRequestInProgress()) {
+            console.log('Another instance is requesting location, waiting...');
+            return await this.waitForLocationFromAnotherInstance(config);
+        }
+
         try {
             const location = await this.detectLocation();
             const updatedConfig = ConfigManager.update({
@@ -95,6 +115,10 @@ const LocationManager = {
         } catch (error) {
             console.error('Location detection failed:', error.message);
 
+            if (error.message === 'Location request already in progress') {
+                return await this.waitForLocationFromAnotherInstance(config);
+            }
+
             if (error.message === 'Location access denied') {
                 const storedConfig = ConfigManager.load();
                 if (storedConfig.latitude && storedConfig.longitude) {
@@ -104,6 +128,42 @@ const LocationManager = {
 
             return config;
         }
+    },
+
+    async waitForLocationFromAnotherInstance(config, maxWaitTime = 15000) {
+        return new Promise((resolve) => {
+            const startTime = Date.now();
+            const checkInterval = 500;
+
+            const syncHandler = (newConfig) => {
+                if (newConfig.latitude && newConfig.longitude && newConfig.lastLocationUpdate) {
+                    clearInterval(intervalId);
+                    ConfigManager.cleanup();
+                    resolve(newConfig);
+                }
+            };
+
+            ConfigManager.onConfigSync(syncHandler);
+
+            const intervalId = setInterval(() => {
+                const currentConfig = ConfigManager.load();
+                const elapsed = Date.now() - startTime;
+
+                if (currentConfig.latitude && currentConfig.longitude && currentConfig.lastLocationUpdate) {
+                    clearInterval(intervalId);
+                    ConfigManager.cleanup();
+                    resolve(currentConfig);
+                } else if (elapsed >= maxWaitTime) {
+                    clearInterval(intervalId);
+                    ConfigManager.cleanup();
+                    resolve(config);
+                } else if (!ConfigManager.isLocationRequestInProgress()) {
+                    clearInterval(intervalId);
+                    ConfigManager.cleanup();
+                    resolve(config);
+                }
+            }, checkInterval);
+        });
     },
 
     async requestLocationUpdate() {
